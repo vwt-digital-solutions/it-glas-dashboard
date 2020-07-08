@@ -11,6 +11,6 @@ def analyse():
     # Analysis
     df_totaal, df_kpi_1 = perform_data_calculations(df_vergunning, df_algemeen, df_planning, df_acties, df_transitielog)
 
-    # to fill collection Graphs
+    # fill collection Graphs
     make_plots_dashboard(df_totaal, df_kpi_1)
     consume(df_totaal, config_analyse.col)
