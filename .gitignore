@@ -1,0 +1,6 @@
+config.py
+.vscode
+config_analyse.py
+__pycache__
+export.sh
+export0.bat
