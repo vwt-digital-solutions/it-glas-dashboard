@@ -15,6 +15,7 @@ import flask
 from flask import send_file
 import io
 import datetime as dt
+from kpi_mapping import config
 
 layout = dict(
     autosize=True,
@@ -27,36 +28,16 @@ layout = dict(
 )
 
 
-# Layout of the app
 def get_body():
     page_content = html.Div(
         [
             dcc.Store
             (
-                id='graph_clickdata', data={'graph1': [-1, -1],
-                                            'graph2': [-1, -1],
-                                            'graph3': [-1, -1]
-                                            }
-            ),
-            dcc.Store
-            (
-                id='current_shown_graph', data=None
-            ),
-            dcc.Store
-            (
-                id='businessline', data=None
-            ),
-            dcc.Store
-            (
-                id='regiovwt', data=None
-            ),
-            dcc.Store
-            (
-                id='checklist', data=None
+                id='graph_clickdata', data=dict((k, [-1, -1]) for k in config.keys())
             ),
             html.Div(
                 [
-                    html.Div(
+                    html.Div(  # Dropdowns en plaatjes
                         [
                             html.Div(  # Filter businessline
                                 [
@@ -143,87 +124,22 @@ def get_body():
                                     html.Div(
                                         [
                                             dcc.Graph(id='graph_overzicht'),
-                                            html.Button('Algemene uitleg dashboard'),
                                         ],
                                         className='half columns',
                                     ),
                                 ],
                                 className='container-display',
-                                style={
-                                    'height': 500,
-                                    'width': 1000,
-                                },
                             )
                         ],
                         className='pretty_container column',
                     ),
-                        ],
-                className="container-display",
-                    ),
-
-            html.Div(  # Horizontaal KPI overzicht
-                [
-                    html.Div(  # Graph KPI1
-                        [
-                                html.Div(
-                                    [
-                                        html.H3('KPI 1: Intake - TG datum afgegeven'),
-                                    ],
-                                    className='pretty_container_title',
-                                    style={
-                                        'textAlign': 'center'
-                                    }
-                                ),
-                                html.Div(
-                                    [
-                                        dcc.Graph(id='graph_kpi1')
-                                    ],
-                                ),
-                        ],
-                        className='pretty_container column',
-                    ),
-                    html.Div(  # Graph KPI2
-                        [
-                            html.Div(
-                                [
-                                    html.H3('KPI 2: LLD - TG datum'),
-                                ],
-                                className='pretty_container_title',
-                                style={
-                                    'textAlign': 'center'
-                                }
-                            ),
-                            html.Div(
-                                [
-                                    dcc.Graph(id='graph_kpi2')
-                                ],
-                            ),
-                        ],
-                        className='pretty_container column',
-                    ),
-                    html.Div(  # Graph KPI3
-                        [
-                            html.Div(
-                                    [
-                                        html.H4('KPI 3: TG - TG_TAG (20 days)'),
-                                    ],
-                                    className='pretty_container_title',
-                                    style={
-                                        'textAlign': 'center'
-                                    }
-                                ),
-                            html.Div(
-                                [
-                                    dcc.Graph(id='graph_kpi3')
-                                ],
-                            ),
-                        ],
-                        className='pretty_container column',
-                    ),
                 ],
+                className="container-display",
+            ),
+            html.Div(
+                [get_graph_html(kpi) for kpi in config.keys()],
                 className='container-display',
             ),
-
             html.Div(  # Tabel
                 [
                     html.Div(
@@ -264,80 +180,122 @@ def get_body():
     return page_content
 
 
-# helper functions barchart
-def create_bar_chart_colors(df, _groupby, _indexes, kleur_kpi, width):
-
-    df_totaal = df.copy()
-
-    layout = go.Layout(
-        bargap=0.01,
-        bargroupgap=0.0,
-        paper_bgcolor='rgb(0,0,0,0)',
-        plot_bgcolor='rgb(0,0,0,0)',
-        showlegend=False,
-        barmode='stack',
-        titlefont={
-            'size': 20,
-        },
-        font={
-            'size': 13,
-        },
-        xaxis={
-            'showgrid': False,
-            'zeroline': False,
-            'side': 'top',
-            'title': 'Aantal projecten',
-        },
-        title={
-            'text': 'Doorloop projecten t.a.v. planning (ideale doorloop)',
-            'y': 0.98,
-            'x': 0.5,
-            'xanchor': 'center',
-            'yanchor': 'top'
-        }
-    )
-
-    df = df_totaal.loc[df_totaal.Hoofdstatus != 'Gereed', :]
-    rode_balk = df.loc[df[kleur_kpi] == 'Rood'].groupby(_groupby)[kleur_kpi].count()
-    gele_balk = df.loc[df[kleur_kpi] == 'Geel'].groupby(_groupby)[kleur_kpi].count()
-    groene_balk = df.loc[df[kleur_kpi] == 'Groen'].groupby(_groupby)[kleur_kpi].count()
-
-    rode_balk = rode_balk.reindex(_indexes).fillna(0).copy()
-    gele_balk = gele_balk.reindex(_indexes).fillna(0).copy()
-    groene_balk = groene_balk.reindex(_indexes).fillna(0).copy()
-
-    return go.Figure(
-        data=[
-            go.Bar(
-                x=groene_balk.values,
-                y=groene_balk.index,
-                name='In time',
-                orientation='h',
-                marker_color='green',
-                opacity=0.8,
-                width=width
-            ),
-            go.Bar(
-                x=gele_balk.values,
-                y=gele_balk.index,
-                name='Take a look',
-                orientation='h',
-                marker_color='orange',
-                opacity=0.8,
-                width=width
-            ),
-            go.Bar(
-                x=rode_balk.values,
-                y=rode_balk.index,
-                name='Overdue',
-                orientation='h',
-                marker_color='red',
-                opacity=0.8,
-                width=width
+def get_graph_html(kpi_number):
+    kpi = Kpi(kpi_number)
+    return html.Div(  # Graph KPI1
+                [
+                    html.Div(
+                        [
+                            html.H3(kpi.title),
+                        ],
+                        className='pretty_container_title',
+                        style={
+                            'textAlign': 'center'
+                        }
+                    ),
+                    html.Div(
+                        [
+                            dcc.Graph(id=kpi.graph_id)
+                        ],
+                    ),
+                ],
+                className='pretty_container column',
             )
-        ],
-        layout=layout,
-    )
+
+
+class Kpi():
+    def __init__(self, number):
+        self.__dict__.update(config[number])
+
+
+# Classes and general functions
+class Graph():
+    def __init__(self, kpi):
+        self.groupby = kpi.subfase_column
+        self.indices = kpi.indices
+        self.width = kpi.width
+        self.kleur_kpi = kpi.Kleur_KPI
+
+    def create_bar(self, df, status, color, name):
+        bar = df.loc[df[self.kleur_kpi] == status].groupby(self.groupby)[self.kleur_kpi].count()
+        bar = bar.reindex(self.indices).fillna(0).copy()
+
+        return go.Bar(
+                    x=bar.values,
+                    y=bar.index,
+                    name=name,
+                    orientation='h',
+                    marker_color=color,
+                    opacity=0.8,
+                    width=self.width
+        )
+
+    def create_bar_chart_colors(self, df):
+
+        df_totaal = df.copy()
+
+        layout = go.Layout(
+            bargap=0.01,
+            bargroupgap=0.0,
+            paper_bgcolor='rgb(0,0,0,0)',
+            plot_bgcolor='rgb(0,0,0,0)',
+            showlegend=False,
+            barmode='stack',
+            titlefont={
+                'size': 20,
+            },
+            font={
+                'size': 13,
+            },
+            xaxis={
+                'showgrid': False,
+                'zeroline': False,
+                'side': 'top',
+                'title': 'Aantal projecten',
+            },
+            title={
+                'text': 'Doorloop projecten t.a.v. planning (ideale doorloop)',
+                'y': 0.98,
+                'x': 0.5,
+                'xanchor': 'center',
+                'yanchor': 'top'
+            }
+        )
+
+        df = df_totaal.loc[df_totaal.Hoofdstatus != 'Gereed', :]
+        rode_balk = self.create_bar(df, "Rood", 'red', 'Overdue')
+        gele_balk = self.create_bar(df, "Geel", 'orange', 'Take a look')
+        groene_balk = self.create_bar(df, "Groen", 'green', 'In time')
+
+        return go.Figure(
+            data=[
+                groene_balk,
+                gele_balk,
+                rode_balk
+            ],
+            layout=layout,
+        )
+
+
+class Filters():
+    def __init__(self, filter_businessline, filter_regiovwt, checklist_filter):
+
+        self.filter_businessline = filter_businessline
+        self.filter_regiovwt = filter_regiovwt
+        self.checklist_filter = checklist_filter
+
+    def apply_filters(self, df):
+        df = df[df['BL'].isin(self.filter_businessline)]
+        df = df[df['RegioVWT'].isin(self.filter_regiovwt)]
+        if 'maandorders' in self.checklist_filter:
+            df = df[df['MaandOrder'] != 'Ja']
+        if 'intrekkingen' in self.checklist_filter:
+            df = df[~df['Projectkenmerk'].isin(['INTR', 'Change', 'Create INTR', 'Change INTR'])]
+        if 'on_hold' in self.checklist_filter:
+            df = df[df['WF_Status'] != 'F_Intern_On_Hold']
+        if 'archief' in self.checklist_filter:
+            df = df[df['WF_Status'] != 'G_Archief']
+        return df
 
 
 # helper function table
@@ -366,30 +324,9 @@ def generate_table(df):
     return tabel
 
 
-# helper function filter dropdown ß
+# helper function filter dropdown
 def get_df():
-    # docs = firestore.Client().collection('Projects').where('project', '==', 'FttB').stream()
-    # records = []
-    # for doc in docs:
-    #     records += [doc.to_dict()]
-    # df = pd.DataFrame(records)
     df = pd.DataFrame(api.get('/Projects?project=FttB'))
-    return df
-
-
-def apply_filters(df, filter_businessline, filter_regiovwt, checklist_filter):
-
-    df = df[df['BL'].isin(filter_businessline)]
-    df = df[df['RegioVWT'].isin(filter_regiovwt)]
-    if 'maandorders' in checklist_filter:
-        df = df[df['MaandOrder'] != 'Ja']
-    if 'intrekkingen' in checklist_filter:
-        df = df[~df['Projectkenmerk'].isin(['INTR', 'Change', 'Create INTR', 'Change INTR'])]
-    if 'on_hold' in checklist_filter:
-        df = df[df['WF_Status'] != 'F_Intern_On_Hold']
-    if 'archief' in checklist_filter:
-        df = df[df['WF_Status'] != 'G_Archief']
-
     return df
 
 
@@ -404,6 +341,47 @@ def create_conditional_style(df):
     return style
 
 
+def get_title(subfase, color):
+    label = html.Label(
+        '{} {} is geselecteerd'.format(subfase, color),
+        style={'fontSize': 20, 'textAlign': 'center'}
+    )
+    return label
+
+
+def filter_click(df, kpi_number, color, subfase):
+    kpi = Kpi(kpi_number)
+    df = df[df[kpi.Kleur_KPI] == color]
+    df = df[df[kpi.subfase_column] == subfase]
+    df = df[df['Hoofdstatus'] != 'Gereed']
+
+    # get relevant columns
+    columns = kpi.columns
+    df = df[columns.keys()]
+    df.rename(columns=columns, inplace=True)
+
+    # sort values
+    # Make generic
+    df.sort_values(kpi.sort_column, inplace=True, ascending=False)
+
+    return df
+
+
+def prepare_data(filters, rename_wvb=True):
+
+    # read all available data
+    df = get_df()
+
+    # Apply checkbox and dropdown filters
+    df = filters.apply_filters(df)
+
+    # rename Werkvoorbereiding naar WvB, lelijke fix voor KPI2
+    if rename_wvb:
+        mask = df['Hoofdstatus'] == 'Werkvoorbereiding'
+        df.at[mask, 'Hoofdstatus'] = 'WvB'
+    return df
+
+
 # callback Graph overzicht
 @app.callback(
     Output('graph_overzicht', 'figure'),
@@ -413,13 +391,10 @@ def create_conditional_style(df):
         Input('checklist_filter', 'value'),
     ]
 )
-def return_graph_overzicht(filter_businessline, filter_regiovwt, checklist_filter):
+def return_graph_overzicht(*filter_list):
 
-    # read df
-    df = get_df()
-
-    # apply filters
-    df = apply_filters(df, filter_businessline, filter_regiovwt, checklist_filter)
+    filters = Filters(*filter_list)
+    df = prepare_data(filters, rename_wvb=False)
 
     # if no data is available then:
     if df.empty:
@@ -473,72 +448,6 @@ def return_graph_overzicht(filter_businessline, filter_regiovwt, checklist_filte
         layout=layout,
     )
 
-# # businessline
-# # regiovwt
-# # checklist
-# @app.callback(
-#     [
-#         Output('businessline', 'data')
-#     ],
-#     [
-#         Input('filter_businessline', 'value'),
-#     ]
-# )
-# def store_businessline(filter_businessline):
-#     return filter_businessline
-
-# @app.callback(
-#     [
-#         Output('regiovwt', 'data')
-#     ],
-#     [
-#         Input('filter_regiovwt', 'value'),
-#     ]
-# )
-# def store_businessline(filter_regiovwt):
-#     return filter_regiovwt
-
-# @app.callback(
-#     [
-#         Output('checklist', 'data')
-#     ],
-#     [
-#         Input('checklist', 'value'),
-#     ]
-# )
-# def store_businessline(checklist_filter):
-#     return checklist_filter
-
-
-# callback Graph KPI1
-@app.callback(
-    Output('graph_kpi1', 'figure'),
-    [
-        Input('filter_businessline', 'value'),
-        Input('filter_regiovwt', 'value'),
-        Input('checklist_filter', 'value'),
-    ]
-)
-def return_graph_kpi1(filter_businessline, filter_regiovwt, checklist_filter):
-
-    # read df
-    df = get_df()
-
-    # apply filters
-    df = apply_filters(df, filter_businessline, filter_regiovwt, checklist_filter)
-
-    # if no data is available then:
-    if df.empty:
-        return []
-
-    # make bar chart
-    _groupby = 'Hoofdstatus'
-    _indexes = ['Intake']
-    kleur_kpi = 'Kleur_KPI_1'
-    barchart = create_bar_chart_colors(df, _groupby=_groupby, _indexes=_indexes, kleur_kpi=kleur_kpi, width=0.12)
-
-    return barchart
-
 
 def get_clickdata(graphs_clickdata):
     graph_clicks = {}
@@ -571,66 +480,15 @@ def find_changed_data(current_clickdata, stored_clickdata):
     return changed_graph, clickdata_to_store
 
 
-def get_table(graph, filter_businessline, filter_regiovwt, checklist_filter, click):
-    if graph == 'graph1':
-        return return_table_kpi1(filter_businessline, filter_regiovwt, checklist_filter, click)
-    if graph == 'graph2':
-        return return_table_kpi2(filter_businessline, filter_regiovwt, checklist_filter, click)
-    if graph == 'graph3':
-        return return_table_kpi3(filter_businessline, filter_regiovwt, checklist_filter, click)
-
-# Callback Tables
-
-
-def create_download_link(filter_businessline, filter_regiovwt, checklist_filter, changed_graph, color, subfase):
-    businesslines = ','.join(filter_businessline)
-    regiovwt = ','.join(filter_regiovwt)
-    checklist = ','.join(checklist_filter)
-    return f""" /download_excel_{changed_graph}?businesslines={businesslines}&
-                regiovwt={regiovwt}&checklist={checklist}&color={color}&subfase={subfase} """
-
-
-@app.callback(
-    [
-        Output('table_kpi', 'children'),
-        Output('graph_clickdata', 'data'),
-        Output('current_shown_graph', 'data'),
-        Output('download-link1_h', 'href')
-    ],
-    [
-        Input('graph_kpi1', 'clickData'),
-        Input('graph_kpi2', 'clickData'),
-        Input('graph_kpi3', 'clickData'),
-        Input('filter_businessline', 'value'),
-        Input('filter_regiovwt', 'value'),
-        Input('checklist_filter', 'value'),
-    ],
-    [
-        State('graph_clickdata', 'data')
-    ]
-)
-def make_table_on_click(clickdata_graph1, clickdata_graph2, clickdata_graph3, filter_businessline, filter_regiovwt,
-                        checklist_filter, state):
-    graphs_clickdata = {
-                            'graph1': clickdata_graph1,
-                            'graph2': clickdata_graph2,
-                            'graph3': clickdata_graph3,
-                        }
-    print('creating graph')
-    current_clickdata = get_clickdata(graphs_clickdata)  # Raises preventupdate if nothing has been clicked yet.
-    changed_graph, clickdata_to_store = find_changed_data(current_clickdata, state)
-    print(f'found that graph {changed_graph} has changed')
-    changed_graph_data = graphs_clickdata[changed_graph]
-    print('Creating table')
-    table = make_table(changed_graph, filter_businessline, filter_regiovwt, checklist_filter, changed_graph_data)
-    print('finished creating table')
-    print("Getting color and subfase")
-    color = get_color(graphs_clickdata[changed_graph])
-    subfase = get_subfase(graphs_clickdata[changed_graph])
-    print(f'color: {color}, subfase: {subfase}')
-    download_link = create_download_link(filter_businessline, filter_regiovwt, checklist_filter, changed_graph, color, subfase)
-    print(f'download link: {download_link}')
-    return [table, clickdata_to_store, changed_graph, download_link]
+def create_download_link(filters, kpi, color, subfase):
+    businesslines = ','.join(filters.filter_businessline)
+    regiovwt = ','.join(filters.filter_regiovwt)
+    checklist = ','.join(filters.checklist_filter)
+    return "/download_excel_{}?" \
+           "businesslines={}&" \
+           "regiovwt={}&" \
+           "checklist={}&" \
+           "color={}&subfase={}".format(kpi, businesslines, regiovwt, checklist, color, subfase)
 
 
 def get_color(click):
@@ -650,282 +508,85 @@ def get_subfase(click):
     return subfase
 
 
-def make_table(changed_graph, filter_businessline, filter_regiovwt, checklist_filter, graph_data):
-    table = get_table(changed_graph,
-                      filter_businessline,
-                      filter_regiovwt,
-                      checklist_filter,
-                      graph_data)
-    return table
-
-
 def get_filename(color, subfase):
     date = dt.datetime.now().strftime('%y%m%d')
-    filename = f"Download_{color}_{subfase}_{date}.xlsx"
-    print(f'filename: {filename}')
+    filename = "Download_{}_{}_{}.xlsx".format(color, subfase, date)
     return filename
 
 
-@app.server.route('/download_excel_graph1')
+# Functions and callbacks for Excel download
+
+def convert_to_excel(df):
+    # Convert df to excel
+    strIO = io.BytesIO()
+    excel_writer = pd.ExcelWriter(strIO, engine="xlsxwriter")
+    df.to_excel(excel_writer, sheet_name="sheet1", index=False)
+    excel_writer.save()
+    strIO.getvalue()
+    strIO.seek(0)
+    return strIO
+
+
+def download_excel(kpi_number, args):
+
+    filters = Filters(
+                        args.get('businesslines').split(','),
+                        args.get('regiovwt').split(','),
+                        args.get('checklist').split(',')
+                    )
+    color = args.get('color')
+    subfase = args.get('subfase')
+
+    df = prepare_data(filters)
+    df = filter_click(df, kpi_number, color, subfase)
+
+    strIO = convert_to_excel(df)
+    filename = get_filename(color, subfase)
+
+    return send_file(strIO,
+                     attachment_filename=filename,
+                     as_attachment=True)
+
+
+@app.server.route('/download_excel_kpi1')
 def download_excel_table1():
-    businessline = flask.request.args.get('businesslines').split(',')
-    print(businessline)
-    regiovwt = flask.request.args.get('regiovwt').split(',')
-    checklist = flask.request.args.get('checklist').split(',')
-    color = flask.request.args.get('color')
-    subfase = flask.request.args.get('subfase')
-
-    columns = {
-        'BAAN_nr': 'Project nummer',
-        'Projectnaam': 'Project naam',
-        'Substatus': 'Substatus',
-        'Uitv_GS': 'Uitvoering geplande start',
-        'Uitv_GE': 'TG Datum',
-        'Dagen_tot_planning': 'Dagen tot TG',
-        'Bodemonderzoek_Afgerond': 'Bodemonderzoek afgerond',
-        'Openstaande_SISU_Actie': 'Openstaande actie',
-        'Openstaande_Vergunning_Aanvraag': 'Openstaande vergunning aanvraag',
-        'Vergunningsoort': 'Vergunning soort',
-        'Aantal_dagen_sinds_vergunning_aanvraag': 'Dagen openstaande vergunning aanvraag',
-        'Terug_in_WF': 'Nr. bounces',
-    }
-
-    # read data
-    df = get_df()
-    # apply fitlers
-    df = apply_filters(df, businessline, regiovwt, checklist)
-
-    # apply click
-    df = df[df['Kleur_KPI_1'] == color]
-    df = df[df['Hoofdstatus'] == subfase]
-    df = df[df['Hoofdstatus'] != 'Gereed']
-
-    # get relevant columns
-    df = df[columns.keys()]
-    df.rename(columns=columns, inplace=True)
-
-    # sort values
-    df.sort_values('Dagen tot TG', inplace=True)
-
-    # Convert df to excel
-    strIO = io.BytesIO()
-    excel_writer = pd.ExcelWriter(strIO, engine="xlsxwriter")
-    df.to_excel(excel_writer, sheet_name="sheet1", index=False)
-    excel_writer.save()
-    strIO.getvalue()
-    strIO.seek(0)
-
-    # Name download file
-
-    filename = get_filename(color, subfase)
-    print(filename)
-    return send_file(strIO,
-                     attachment_filename=filename,
-                     as_attachment=True)
+    return download_excel('kpi1', flask.request.args)
 
 
-@app.server.route('/download_excel_graph2')
+@app.server.route('/download_excel_kpi2')
 def download_excel_table2():
-    businessline = flask.request.args.get('businesslines').split(',')
-    print(businessline)
-    regiovwt = flask.request.args.get('regiovwt').split(',')
-    checklist = flask.request.args.get('checklist').split(',')
-    color = flask.request.args.get('color')
-    subfase = flask.request.args.get('subfase')
-
-    columns = {
-        'BAAN_nr': 'Project nummer',
-        'Projectnaam': 'Project naam',
-        'Substatus': 'Substatus',
-        'Uitv_GS': 'Uitvoering geplande start',
-        'Uitv_GE': 'TG Datum',
-        'Dagen_tot_planning': 'Dagen tot TG',
-        'Bodemonderzoek_Afgerond': 'Bodemonderzoek afgerond',
-        'Openstaande_SISU_Actie': 'Openstaande actie',
-        'Openstaande_Vergunning_Aanvraag': 'Openstaande vergunning aanvraag',
-        'Vergunningsoort': 'Vergunning soort',
-        'Aantal_dagen_sinds_vergunning_aanvraag': 'Dagen openstaande vergunning aanvraag',
-        'Terug_in_WF': 'Nr. bounces',
-        'Hoofdstatus': 'Hoofdstatus',
-        }
-
-    # read data
-    df = get_df()
-    # apply fitlers
-    df = apply_filters(df, businessline, regiovwt, checklist)
-
-    # rename Werkvoorbereiding naar WvB
-    mask = df['Hoofdstatus'] == 'Werkvoorbereiding'
-    df.at[mask, 'Hoofdstatus'] = 'WvB'
-
-    # apply click
-    df = df[df['Kleur_KPI_2'] == color]
-    df = df[df['Hoofdstatus'] == subfase]
-    df = df[df['Hoofdstatus'] != 'Gereed']
-
-    # get relevant columns
-    df = df[columns.keys()]
-    df.rename(columns=columns, inplace=True)
-
-    # sort values
-    df.sort_values('Dagen tot TG', inplace=True)
-
-    # Convert df to excel
-    strIO = io.BytesIO()
-    excel_writer = pd.ExcelWriter(strIO, engine="xlsxwriter")
-    df.to_excel(excel_writer, sheet_name="sheet1", index=False)
-    excel_writer.save()
-    strIO.getvalue()
-    strIO.seek(0)
-
-    # Name download file
-
-    filename = get_filename(color, subfase)
-    print(filename)
-    return send_file(strIO,
-                     attachment_filename=filename,
-                     as_attachment=True)
+    return download_excel('kpi2', flask.request.args)
 
 
-@app.server.route('/download_excel_graph3')
+@app.server.route('/download_excel_kpi3')
 def download_excel_table3():
-    businessline = flask.request.args.get('businesslines').split(',')
-    print(businessline)
-    regiovwt = flask.request.args.get('regiovwt').split(',')
-    checklist = flask.request.args.get('checklist').split(',')
-    color = flask.request.args.get('color')
-    subfase = flask.request.args.get('subfase')
-
-    columns = {
-        'BAAN_nr': 'Project nummer',
-        'Projectnaam': 'Project naam',
-        'Substatus': 'Substatus',
-        'Totaal_dagen_in_As_Built_Stage': 'Dagen in As Built',
-        'Bodemonderzoek_Afgerond': 'Bodemonderzoek afgerond',
-        'Openstaande_SISU_Actie': 'Openstaande actie',
-        'Openstaande_Vergunning_Aanvraag': 'Openstaande vergunning aanvraag',
-        'Vergunningsoort': 'Vergunning soort',
-        'Terug_in_WF': 'Nr. bounces',
-        'Kleur_KPI_3': 'Kleur_KPI_3',
-        'WF_Status': 'WF_Status',
-        'MaandOrder': 'MaandOrder',
-        'RegioVWT': 'RegioVWT',
-        'As_Built_Stage': 'As_Built_Stage'
-    }
-
-    # read data
-    df = get_df()
-    # apply fitlers
-    df = apply_filters(df, businessline, regiovwt, checklist)
-
-    # apply click
-    df = df[df['Kleur_KPI_3'] == color]
-    df = df[df['As_Built_Stage'] == subfase]
-    df = df[df['Hoofdstatus'] != 'Gereed']
-
-    # get relevant columns
-    df = df[columns.keys()]
-    df.rename(columns=columns, inplace=True)
-
-    # sort values
-    df.sort_values('Dagen in As Built', inplace=True, ascending=False)
-
-    # Convert df to excel
-    strIO = io.BytesIO()
-    excel_writer = pd.ExcelWriter(strIO, engine="xlsxwriter")
-    df.to_excel(excel_writer, sheet_name="sheet1", index=False)
-    excel_writer.save()
-    strIO.getvalue()
-    strIO.seek(0)
-
-    # Name download file
-
-    filename = get_filename(color, subfase)
-    print(filename)
-    return send_file(strIO,
-                     attachment_filename=filename,
-                     as_attachment=True)
+    return download_excel('kpi3', flask.request.args)
 
 
-# callbak Table KPI1
-# @app.callback(
-#     [
-#         Output('table_kpi1', 'children'),
-#         Output('graph_visible', 'data')
-#     ],
-#     [
-#         Input('filter_businessline', 'value'),
-#         Input('filter_regiovwt', 'value'),
-#         Input('checklist_filter', 'value'),
-#         Input('graph_kpi1', 'clickData')
-#     ]
-# )
-def return_table_kpi1(filter_businessline, filter_regiovwt, checklist_filter, click):
+# Functions and callbacks for graphs
 
-    color_dict = {
-        0: 'Groen',
-        1: 'Geel',
-        2: 'Rood'
-    }
+def make_graph(kpi_number, filter_list):
+    kpi = Kpi(kpi_number)
+    filters = Filters(*filter_list)
+    graph = Graph(kpi)
+    df = prepare_data(filters)
 
-    columns = {
-        'BAAN_nr': 'Project nummer',
-        'Projectnaam': 'Project naam',
-        'Substatus': 'Substatus',
-        'Uitv_GS': 'Uitvoering geplande start',
-        'Uitv_GE': 'TG Datum',
-        'Dagen_tot_planning': 'Dagen tot TG',
-        'Bodemonderzoek_Afgerond': 'Bodemonderzoek afgerond',
-        'Openstaande_SISU_Actie': 'Openstaande actie',
-        'Openstaande_Vergunning_Aanvraag': 'Openstaande vergunning aanvraag',
-        'Vergunningsoort': 'Vergunning soort',
-        'Aantal_dagen_sinds_vergunning_aanvraag': 'Dagen openstaande vergunning aanvraag',
-        'Terug_in_WF': 'Nr. bounces',
-    }
+    barchart = graph.create_bar_chart_colors(df)
+    return barchart
 
-    if click is None:
-        color = 'Groen'
-        subfase = 'Intake'
-    else:
-        color = click['points'][0]['curveNumber']
-        color = color_dict[color]
-        subfase = click['points'][0]['y']
 
-    # read data
-    df = get_df()
-    # apply fitlers
-    df = apply_filters(df, filter_businessline, filter_regiovwt, checklist_filter)
-
-    # apply click
-    df = df[df['Kleur_KPI_1'] == color]
-    df = df[df['Hoofdstatus'] == subfase]
-    df = df[df['Hoofdstatus'] != 'Gereed']
-
-    # get relevant columns
-    df = df[columns.keys()]
-    df.rename(columns=columns, inplace=True)
-
-    # sort values
-    df.sort_values('Dagen tot TG', inplace=True)
-
-    # if no data is available then:
-    if df.empty:
-        titel = html.Label(
-            'Er zijn geen projecten schikbaar',
-            style={'fontSize': 20, 'textAlign': 'center'}
-        )
-        return [titel]
-
-    # generate tabel
-    tabel = generate_table(df)
-    # generate title
-    titel = html.Label(
-        '{} {} is geselecteerd'.format(subfase, color),
-        id='title_kpi1',
-        style={'fontSize': 20, 'textAlign': 'center'}
-    )
-
-    return [titel, tabel]
+# callback Graph KPI1
+@app.callback(
+    Output('graph_kpi1', 'figure'),
+    [
+        Input('filter_businessline', 'value'),
+        Input('filter_regiovwt', 'value'),
+        Input('checklist_filter', 'value'),
+    ]
+)
+def return_graph_kpi1(*filter_list):
+    barchart = make_graph('kpi1', filter_list)
+    return barchart
 
 
 # callback Graph KPI2
@@ -937,98 +598,9 @@ def return_table_kpi1(filter_businessline, filter_regiovwt, checklist_filter, cl
         Input('checklist_filter', 'value'),
     ]
 )
-def return_graph_kpi2(filter_businessline, filter_regiovwt, checklist_filter):
-
-    # read df
-    df = get_df()
-    # apply filters
-    df = apply_filters(df, filter_businessline, filter_regiovwt, checklist_filter)
-
-    # rename Werkvoorbereiding naar WvB
-    mask = df['Hoofdstatus'] == 'Werkvoorbereiding'
-    df.at[mask, 'Hoofdstatus'] = 'WvB'
-
-    # make bar chart
-    _groupby = 'Hoofdstatus'
-    _indexes = ['Uitvoering', 'WvB', 'LLD']
-    kleur_kpi = 'Kleur_KPI_2'
-    barchart = create_bar_chart_colors(df, _groupby=_groupby, _indexes=_indexes, kleur_kpi=kleur_kpi, width=0.35)
-
+def return_graph_kpi2(*filter_list):
+    barchart = make_graph('kpi2', filter_list)
     return barchart
-
-
-# # callbak Table KPI2
-# @app.callback(
-#     Output('table_kpi2', 'children'),
-#     [
-#         Input('filter_businessline', 'value'),
-#         Input('filter_regiovwt', 'value'),
-#         Input('checklist_filter', 'value'),
-#         Input('graph_kpi2', 'clickData')
-#     ]
-# )
-def return_table_kpi2(filter_businessline, filter_regiovwt, checklist_filter, click):
-
-    color_dict = {
-        0: 'Groen',
-        1: 'Geel',
-        2: 'Rood'
-    }
-
-    columns = {
-        'BAAN_nr': 'Project nummer',
-        'Projectnaam': 'Project naam',
-        'Substatus': 'Substatus',
-        'Uitv_GS': 'Uitvoering geplande start',
-        'Uitv_GE': 'TG Datum',
-        'Dagen_tot_planning': 'Dagen tot TG',
-        'Bodemonderzoek_Afgerond': 'Bodemonderzoek afgerond',
-        'Openstaande_SISU_Actie': 'Openstaande actie',
-        'Openstaande_Vergunning_Aanvraag': 'Openstaande vergunning aanvraag',
-        'Vergunningsoort': 'Vergunning soort',
-        'Aantal_dagen_sinds_vergunning_aanvraag': 'Dagen openstaande vergunning aanvraag',
-        'Terug_in_WF': 'Nr. bounces',
-        'Hoofdstatus': 'Hoofdstatus',
-        }
-
-    if click is None:
-        color = 'Groen'
-        subfase = 'Uitvoering'
-    else:
-        color = click['points'][0]['curveNumber']
-        color = color_dict[color]
-        subfase = click['points'][0]['y']
-
-    # read data
-    df = get_df()
-    # apply fitlers
-    df = apply_filters(df, filter_businessline, filter_regiovwt, checklist_filter)
-
-    # rename Werkvoorbereiding naar WvB
-    mask = df['Hoofdstatus'] == 'Werkvoorbereiding'
-    df.at[mask, 'Hoofdstatus'] = 'WvB'
-
-    # apply click
-    df = df[df['Kleur_KPI_2'] == color]
-    df = df[df['Hoofdstatus'] == subfase]
-    df = df[df['Hoofdstatus'] != 'Gereed']
-
-    # get relevant columns
-    df = df[columns.keys()]
-    df.rename(columns=columns, inplace=True)
-
-    # sort values
-    df.sort_values('Dagen tot TG', inplace=True)
-
-    # generate tabel
-    tabel = generate_table(df)
-    # generate title
-    titel = html.Label(
-        '{} {} is geselecteerd'.format(subfase, color),
-        style={'fontSize': 20, 'textAlign': 'center'}
-    )
-
-    return [titel, tabel]
 
 
 # callback Graph KPI3
@@ -1040,87 +612,55 @@ def return_table_kpi2(filter_businessline, filter_regiovwt, checklist_filter, cl
         Input('checklist_filter', 'value'),
     ]
 )
-def return_graph_kpi3(filter_businessline, filter_regiovwt, checklist_filter):
-
-    # read df
-    df = get_df()
-    # apply filters
-    df = apply_filters(df, filter_businessline, filter_regiovwt, checklist_filter)
-
-    # make bar chart
-    _groupby = 'As_Built_Stage'
-    _indexes = ['As_Built_4', 'As_Built_3', 'As_Built_2', 'As_Built_1']
-    kleur_kpi = 'Kleur_KPI_3'
-    barchart = create_bar_chart_colors(df, _groupby=_groupby, _indexes=_indexes, kleur_kpi=kleur_kpi, width=0.5)
-
+def return_graph_kpi3(*filter_list):
+    barchart = make_graph('kpi3', filter_list)
     return barchart
 
 
-# callbak Table KPI3
-# @app.callback(
-#     Output('table_kpi3', 'children'),
-#     [
-#         Input('filter_businessline', 'value'),
-#         Input('filter_regiovwt', 'value'),
-#         Input('checklist_filter', 'value'),
-#         Input('graph_kpi3', 'clickData')
-#     ]
-# )
-def return_table_kpi3(filter_businessline, filter_regiovwt, checklist_filter, click):
+# Functions and callbacks for tables
+@app.callback(
+    [
+        Output('table_kpi', 'children'),
+        Output('graph_clickdata', 'data'),
+        Output('download-link1_h', 'href')
+    ],
+    [
+        Input('graph_kpi1', 'clickData'),
+        Input('graph_kpi2', 'clickData'),
+        Input('graph_kpi3', 'clickData'),
+        Input('filter_businessline', 'value'),
+        Input('filter_regiovwt', 'value'),
+        Input('checklist_filter', 'value'),
+    ],
+    [
+        State('graph_clickdata', 'data')
+    ]
+)
+def make_table_on_click(clickdata_graph1, clickdata_graph2, clickdata_graph3,
+                        filter_businessline, filter_regiovwt, checklist_filter, state):
+    filters = Filters(filter_businessline, filter_regiovwt, checklist_filter)
+    kpi_clickdata = {
+                            'kpi1': clickdata_graph1,
+                            'kpi2': clickdata_graph2,
+                            'kpi3': clickdata_graph3,
+                        }
+    # Raises preventupdate if nothing has been clicked yet.
+    current_clickdata = get_clickdata(kpi_clickdata)
+    changed_kpi, clickdata_to_store = find_changed_data(current_clickdata, state)
+    color = get_color(kpi_clickdata[changed_kpi])
+    subfase = get_subfase(kpi_clickdata[changed_kpi])
 
-    color_dict = {
-        0: 'Groen',
-        1: 'Geel',
-        2: 'Rood'
-    }
+    table = return_table_kpi(changed_kpi, filters, color, subfase)
+    download_link = create_download_link(filters, changed_kpi, color, subfase)
 
-    columns = {
-        'BAAN_nr': 'Project nummer',
-        'Projectnaam': 'Project naam',
-        'Substatus': 'Substatus',
-        'Totaal_dagen_in_As_Built_Stage': 'Dagen in As Built',
-        'Bodemonderzoek_Afgerond': 'Bodemonderzoek afgerond',
-        'Openstaande_SISU_Actie': 'Openstaande actie',
-        'Openstaande_Vergunning_Aanvraag': 'Openstaande vergunning aanvraag',
-        'Vergunningsoort': 'Vergunning soort',
-        'Terug_in_WF': 'Nr. bounces',
-        'Kleur_KPI_3': 'Kleur_KPI_3',
-        'WF_Status': 'WF_Status',
-        'MaandOrder': 'MaandOrder',
-        'RegioVWT': 'RegioVWT',
-        'As_Built_Stage': 'As_Built_Stage'
-    }
+    return [table, clickdata_to_store, download_link]
 
-    if click is None:
-        color = 'Groen'
-        subfase = 'As_Built_1'
-    else:
-        color = click['points'][0]['curveNumber']
-        color = color_dict[color]
-        subfase = click['points'][0]['y']
 
-    # read data
-    df = get_df()
-    # apply fitlers
-    df = apply_filters(df, filter_businessline, filter_regiovwt, checklist_filter)
+def return_table_kpi(kpi, filters, color, subfase):
 
-    # apply click
-    df = df[df['Kleur_KPI_3'] == color]
-    df = df[df['As_Built_Stage'] == subfase]
-    df = df[df['Hoofdstatus'] != 'Gereed']
+    df = prepare_data(filters)
+    df = filter_click(df, kpi, color, subfase)
 
-    # get relevant columns
-    df = df[columns.keys()]
-    df.rename(columns=columns, inplace=True)
-
-    # sort values
-    df.sort_values('Dagen in As Built', inplace=True, ascending=False)
-
-    # generate tabel
-    tabel = generate_table(df)
-    # generate title
-    titel = html.Label(
-        '{} {} is geselecteerd'.format(subfase, color),
-        style={'fontSize': 20, 'textAlign': 'center'}
-    )
-    return [titel, tabel]
+    table = generate_table(df)
+    title = get_title(subfase, color)
+    return [title, table]
